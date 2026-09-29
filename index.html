@@ -1,0 +1,180 @@
+     <!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="dududu - Rút gọn liên kết nhanh, gọn và dễ chia sẻ.">
+  <title>dududu | Rút gọn liên kết</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav class="nav" aria-label="Điều hướng chính">
+    <a class="brand" href="/" aria-label="dududu trang chủ">
+      <span class="brand-mark">d</span>
+      dududu
+    </a>
+    <a class="nav-link" href="#history">Liên kết gần đây</a>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">Nhanh hơn một cú click</span>
+        <h1>Link ngắn.<br><span>Ý tưởng lớn.</span></h1>
+        <p class="lead">Biến những đường dẫn dài thành liên kết gọn gàng, dễ nhớ và sẵn sàng để chia sẻ ở bất cứ đâu.</p>
+        <div class="benefits" aria-label="Ưu điểm">
+          <span>Miễn phí</span>
+          <span>Không cần đăng ký</span>
+          <span>Dùng ngay lập tức</span>
+        </div>
+      </div>
+
+      <div class="shortener-card">
+        <h2 class="card-title">Rút gọn liên kết</h2>
+        <p class="card-copy">Dán URL của bạn vào đây. dududu sẽ lo phần còn lại.</p>
+        <form id="shorten-form" novalidate>
+          <label for="long-url">Đường dẫn dài</label>
+          <input id="long-url" class="url-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/duong-dan-rat-dai" required>
+          <button id="submit-btn" class="primary-btn" type="submit">Tạo link dududu</button>
+          <div id="message" class="message" role="alert" aria-live="polite"></div>
+        </form>
+
+        <div id="result" class="result" aria-live="polite">
+          <div class="result-label">Liên kết đã sẵn sàng</div>
+          <div class="result-row">
+            <a id="short-url" class="short-url" href="#" target="_blank" rel="noopener"></a>
+            <button id="copy-btn" class="copy-btn" type="button">Sao chép</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="history" class="history-section" aria-labelledby="history-title">
+      <div class="history-header">
+        <h2 id="history-title">Liên kết gần đây</h2>
+        <button id="clear-btn" class="clear-btn" type="button">Xóa lịch sử</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+  </main>
+
+  <footer>dududu &copy; 2026. Liên kết gọn, chia sẻ vui.</footer>
+
+  <script>
+    const form = document.querySelector('#shorten-form');
+    const input = document.querySelector('#long-url');
+    const submitButton = document.querySelector('#submit-btn');
+    const message = document.querySelector('#message');
+    const result = document.querySelector('#result');
+    const shortUrl = document.querySelector('#short-url');
+    const copyButton = document.querySelector('#copy-btn');
+    const historyList = document.querySelector('#history-list');
+    const clearButton = document.querySelector('#clear-btn');
+    const storageKey = 'dududu-history';
+
+    function validHttpUrl(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }
+
+    function getHistory() {
+      try { return JSON.parse(localStorage.getItem(storageKey)) || []; }
+      catch { return []; }
+    }
+
+    function renderHistory() {
+      const items = getHistory();
+      clearButton.style.display = items.length ? 'block' : 'none';
+
+      if (!items.length) {
+        historyList.innerHTML = '<div class="empty">Chưa có liên kết nào. Link đầu tiên của bạn sẽ xuất hiện ở đây.</div>';
+        return;
+      }
+
+      historyList.innerHTML = items.map((item) => `
+        <article class="history-item">
+          <div style="min-width:0">
+            <a class="history-short" href="${escapeHtml(item.shortUrl)}" target="_blank" rel="noopener">${escapeHtml(item.shortUrl)}</a>
+            <div class="history-long" title="${escapeHtml(item.longUrl)}">${escapeHtml(item.longUrl)}</div>
+          </div>
+          <time class="history-date">${escapeHtml(item.createdAt)}</time>
+        </article>
+      `).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      })[char]);
+    }
+
+    function remember(longUrl, shortLink) {
+      const items = getHistory().filter((item) => item.shortUrl !== shortLink);
+      items.unshift({
+        longUrl,
+        shortUrl: shortLink,
+        createdAt: new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())
+      });
+      localStorage.setItem(storageKey, JSON.stringify(items.slice(0, 8)));
+      renderHistory();
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const url = input.value.trim();
+      message.textContent = '';
+      result.classList.remove('show');
+
+      if (!validHttpUrl(url)) {
+        message.textContent = 'Vui lòng nhập URL đầy đủ, bắt đầu bằng http:// hoặc https://';
+        input.focus();
+        return;
+      }
+
+      submitButton.disabled = true;
+      submitButton.textContent = 'Đang tạo liên kết...';
+
+      try {
+        const response = await fetch('/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          body: url
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Không thể rút gọn liên kết.');
+
+        shortUrl.href = data.shortUrl;
+        shortUrl.textContent = data.shortUrl;
+        result.classList.add('show');
+        remember(url, data.shortUrl);
+      } catch (error) {
+        message.textContent = error.message || 'Không thể kết nối máy chủ. Hãy thử lại.';
+      } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Tạo link dududu';
+      }
+    });
+
+    copyButton.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(shortUrl.textContent);
+        copyButton.textContent = 'Đã chép';
+        setTimeout(() => { copyButton.textContent = 'Sao chép'; }, 1600);
+      } catch {
+        message.textContent = 'Không thể sao chép tự động. Hãy chọn và sao chép liên kết.';
+      }
+    });
+
+    clearButton.addEventListener('click', () => {
+      localStorage.removeItem(storageKey);
+      renderHistory();
+    });
+
+    renderHistory();
+  </script>
+</body>
+</html>
